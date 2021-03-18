@@ -3,7 +3,7 @@
 # Blockbook
 
 ## To install dependancies
-`wget -qO- https://raw.githubusercontent.com/wkibbler/blockbook/master/deps.sh | bash`
+`wget -qO- https://raw.githubusercontent.com/CryptoLover705/QBC-Blockbook/master/deps.sh | bash`
 
 **Blockbook** is back-end service for Trezor wallet. Main features of **Blockbook** are:
 
