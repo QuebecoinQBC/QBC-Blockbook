@@ -1,15 +1,16 @@
-package bellcoin
+package bitzeny
 
 import (
+	"blockbook/bchain/coins/btc"
+
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
-	"blockbook/bchain/coins/btc"
 )
 
 // magic numbers
 const (
-	MainnetMagic wire.BitcoinNet = 0xbebacefa
-	TestnetMagic wire.BitcoinNet = 0x0709110b
+	MainnetMagic wire.BitcoinNet = 0xf9bea5da
+	TestnetMagic wire.BitcoinNet = 0x594e4559
 )
 
 // chain parameters
@@ -21,29 +22,29 @@ var (
 func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = []byte{25}
-	MainNetParams.ScriptHashAddrID = []byte{85}
-	MainNetParams.Bech32HRPSegwit = "bm"
+	MainNetParams.PubKeyHashAddrID = []byte{81}
+	MainNetParams.ScriptHashAddrID = []byte{5}
+	MainNetParams.Bech32HRPSegwit = "bz"
 
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
 	TestNetParams.PubKeyHashAddrID = []byte{111}
 	TestNetParams.ScriptHashAddrID = []byte{196}
-	TestNetParams.Bech32HRPSegwit = "bt"
+	TestNetParams.Bech32HRPSegwit = "tz"
 }
 
-// BellcoinParser handle
-type BellcoinParser struct {
+// BitZenyParser handle
+type BitZenyParser struct {
 	*btc.BitcoinParser
 }
 
-// NewBellcoinParser returns new BellcoinParser instance
-func NewBellcoinParser(params *chaincfg.Params, c *btc.Configuration) *BellcoinParser {
-	return &BellcoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+// NewBitZenyParser returns new BitZenyParser instance
+func NewBitZenyParser(params *chaincfg.Params, c *btc.Configuration) *BitZenyParser {
+	return &BitZenyParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
 }
 
-// GetChainParams contains network parameters for the main Bellcoin network,
-// and the test Bellcoin network
+// GetChainParams contains network parameters for the main BitZeny network,
+// and the test BitZeny network
 func GetChainParams(chain string) *chaincfg.Params {
 	if !chaincfg.IsRegistered(&MainNetParams) {
 		err := chaincfg.Register(&MainNetParams)

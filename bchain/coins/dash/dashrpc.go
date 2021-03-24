@@ -1,12 +1,12 @@
 package dash
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"encoding/json"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
 )
 
 const firstBlockWithSpecialTransactions = 1028160

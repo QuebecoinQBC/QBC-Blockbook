@@ -3,15 +3,19 @@
 package qbc
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
+	"bytes"
 	"encoding/hex"
+	"fmt"
+	"io/ioutil"
 	"math/big"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/martinboehm/btcutil/chaincfg"
+	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
 )
 
 func TestMain(m *testing.M) {

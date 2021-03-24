@@ -1,11 +1,11 @@
 package qbc
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"encoding/json"
 
 	"github.com/golang/glog"
+	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
 )
 
 // qbcRPC is an interface to JSON-RPC bitcoind service.

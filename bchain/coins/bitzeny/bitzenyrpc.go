@@ -1,26 +1,27 @@
-package bellcoin
+package bitzeny
 
 import (
 	"encoding/json"
 
-	"github.com/golang/glog"
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
+
+	"github.com/golang/glog"
 )
 
-// BellcoinRPC is an interface to JSON-RPC bitcoind service.
-type BellcoinRPC struct {
+// BitZenyRPC is an interface to JSON-RPC bitcoind service.
+type BitZenyRPC struct {
 	*btc.BitcoinRPC
 }
 
-// NewBellcoinRPC returns new BellcoinRPC instance.
-func NewBellcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
+// NewBitZenyRPC returns new BitZenyRPC instance.
+func NewBitZenyRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	b, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
 		return nil, err
 	}
 
-	s := &BellcoinRPC{
+	s := &BitZenyRPC{
 		b.(*btc.BitcoinRPC),
 	}
 	s.RPCMarshaler = btc.JSONMarshalerV2{}
@@ -29,8 +30,8 @@ func NewBellcoinRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	return s, nil
 }
 
-// Initialize initializes BellcoinRPC instance.
-func (b *BellcoinRPC) Initialize() error {
+// Initialize initializes BitZenyRPC instance.
+func (b *BitZenyRPC) Initialize() error {
 	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
@@ -41,7 +42,7 @@ func (b *BellcoinRPC) Initialize() error {
 	params := GetChainParams(chainName)
 
 	// always create parser
-	b.Parser = NewBellcoinParser(params, b.ChainConfig)
+	b.Parser = NewBitZenyParser(params, b.ChainConfig)
 
 	// parameters for getInfo request
 	if params.Net == MainnetMagic {

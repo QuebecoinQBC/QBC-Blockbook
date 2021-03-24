@@ -9,6 +9,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"blockbook/common"
 )
 
 // BaseParser implements data parsing/handling functionality base for all other parsers
@@ -39,9 +40,9 @@ func (p *BaseParser) GetAddrDescForUnknownInput(tx *Tx, input int) AddressDescri
 
 const zeros = "0000000000000000000000000000000000000000"
 
-// AmountToBigInt converts amount in json.Number (string) to big.Int
+// AmountToBigInt converts amount in common.JSONNumber (string) to big.Int
 // it uses string operations to avoid problems with rounding
-func (p *BaseParser) AmountToBigInt(n json.Number) (big.Int, error) {
+func (p *BaseParser) AmountToBigInt(n common.JSONNumber) (big.Int, error) {
 	var r big.Int
 	s := string(n)
 	i := strings.IndexByte(s, '.')
@@ -159,6 +160,11 @@ func (p *BaseParser) UnpackBlockHash(buf []byte) (string, error) {
 // GetChainType is type of the blockchain, default is ChainBitcoinType
 func (p *BaseParser) GetChainType() ChainType {
 	return ChainBitcoinType
+}
+
+// MinimumCoinbaseConfirmations returns minimum number of confirmations a coinbase transaction must have before it can be spent
+func (p *BaseParser) MinimumCoinbaseConfirmations() int {
+	return 0
 }
 
 // PackTx packs transaction to byte array using protobuf
