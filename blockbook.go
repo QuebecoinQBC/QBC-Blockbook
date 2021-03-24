@@ -1,14 +1,10 @@
 package main
 
 import (
-	"blockbook/api"
-	"blockbook/bchain"
-	"blockbook/bchain/coins"
-	"blockbook/common"
-	"blockbook/db"
-	"blockbook/server"
 	"context"
+	"encoding/json"
 	"flag"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -23,6 +19,13 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"blockbook/api"
+	"blockbook/bchain"
+	"blockbook/bchain/coins"
+	"blockbook/common"
+	"blockbook/db"
+	"blockbook/fiat"
+	"blockbook/server"
 )
 
 // debounce too close requests for resync
@@ -51,6 +54,7 @@ var (
 
 	synchronize = flag.Bool("sync", false, "synchronizes until tip, if together with zeromq, keeps index synchronized")
 	repair      = flag.Bool("repair", false, "repair the database")
+	fixUtxo     = flag.Bool("fixutxo", false, "check and fix utxo db and exit")
 	prof        = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
 
 	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing in bulk mode")
@@ -69,6 +73,8 @@ var (
 
 	noTxCache = flag.Bool("notxcache", false, "disable tx cache")
 
+	enableSubNewTx = flag.Bool("enablesubnewtx", false, "enable support for subscribing to all new transactions")
+
 	computeColumnStats  = flag.Bool("computedbstats", false, "compute column stats and exit")
 	computeFeeStatsFlag = flag.Bool("computefeestats", false, "compute fee stats for blocks in blockheight-blockuntil range and exit")
 	dbStatsPeriodHours  = flag.Int("dbstatsperiod", 24, "period of db stats collection in hours, 0 disables stats collection")
@@ -81,23 +87,25 @@ var (
 )
 
 var (
-	chanSyncIndex              = make(chan struct{})
-	chanSyncMempool            = make(chan struct{})
-	chanStoreInternalState     = make(chan struct{})
-	chanSyncIndexDone          = make(chan struct{})
-	chanSyncMempoolDone        = make(chan struct{})
-	chanStoreInternalStateDone = make(chan struct{})
-	chain                      bchain.BlockChain
-	mempool                    bchain.Mempool
-	index                      *db.RocksDB
-	txCache                    *db.TxCache
-	metrics                    *common.Metrics
-	syncWorker                 *db.SyncWorker
-	internalState              *common.InternalState
-	callbacksOnNewBlock        []bchain.OnNewBlockFunc
-	callbacksOnNewTxAddr       []bchain.OnNewTxAddrFunc
-	chanOsSignal               chan os.Signal
-	inShutdown                 int32
+	chanSyncIndex                 = make(chan struct{})
+	chanSyncMempool               = make(chan struct{})
+	chanStoreInternalState        = make(chan struct{})
+	chanSyncIndexDone             = make(chan struct{})
+	chanSyncMempoolDone           = make(chan struct{})
+	chanStoreInternalStateDone    = make(chan struct{})
+	chain                         bchain.BlockChain
+	mempool                       bchain.Mempool
+	index                         *db.RocksDB
+	txCache                       *db.TxCache
+	metrics                       *common.Metrics
+	syncWorker                    *db.SyncWorker
+	internalState                 *common.InternalState
+	callbacksOnNewBlock           []bchain.OnNewBlockFunc
+	callbacksOnNewTxAddr          []bchain.OnNewTxAddrFunc
+	callbacksOnNewTx              []bchain.OnNewTxFunc
+	callbacksOnNewFiatRatesTicker []fiat.OnNewFiatRatesTicker
+	chanOsSignal                  chan os.Signal
+	inShutdown                    int32
 )
 
 func init() {
@@ -179,7 +187,26 @@ func mainWithExitCode() int {
 		glog.Error("internalState: ", err)
 		return exitCodeFatal
 	}
+
+	// fix possible inconsistencies in the UTXO index
+	if *fixUtxo || !internalState.UtxoChecked {
+		err = index.FixUtxos(chanOsSignal)
+		if err != nil {
+			glog.Error("fixUtxos: ", err)
+			return exitCodeFatal
+		}
+		internalState.UtxoChecked = true
+	}
 	index.SetInternalState(internalState)
+	if *fixUtxo {
+		err = index.StoreInternalState(internalState)
+		if err != nil {
+			glog.Error("StoreInternalState: ", err)
+			return exitCodeFatal
+		}
+		return exitCodeOK
+	}
+
 	if internalState.DbState != common.DbStateClosed {
 		if internalState.DbState == common.DbStateInconsistent {
 			glog.Error("internalState: database is in inconsistent state and cannot be used")
@@ -274,7 +301,7 @@ func mainWithExitCode() int {
 		if chain.GetChainParser().GetChainType() == bchain.ChainBitcoinType {
 			addrDescForOutpoint = index.AddrDescForOutpoint
 		}
-		err = chain.InitializeMempool(addrDescForOutpoint, onNewTxAddr)
+		err = chain.InitializeMempool(addrDescForOutpoint, onNewTxAddr, onNewTx)
 		if err != nil {
 			glog.Error("initializeMempool ", err)
 			return exitCodeFatal
@@ -295,6 +322,8 @@ func mainWithExitCode() int {
 		// start full public interface
 		callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
 		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
+		callbacksOnNewTx = append(callbacksOnNewTx, publicServer.OnNewTx)
+		callbacksOnNewFiatRatesTicker = append(callbacksOnNewFiatRatesTicker, publicServer.OnNewFiatRatesTicker)
 		publicServer.ConnectFullPublicInterface()
 	}
 
@@ -317,6 +346,8 @@ func mainWithExitCode() int {
 	}
 
 	if internalServer != nil || publicServer != nil || chain != nil {
+		// start fiat rates downloader only if not shutting down immediately
+		initFiatRatesDownloader(index, *blockchain)
 		waitForSignalAndShutdown(internalServer, publicServer, chain, 10*time.Second)
 	}
 
@@ -376,7 +407,7 @@ func startInternalServer() (*server.InternalServer, error) {
 
 func startPublicServer() (*server.PublicServer, error) {
 	// start public server in limited functionality, extend it after sync is finished by calling ConnectFullPublicInterface
-	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, *debugMode)
+	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, *debugMode, *enableSubNewTx)
 	if err != nil {
 		return nil, err
 	}
@@ -516,8 +547,24 @@ func syncIndexLoop() {
 }
 
 func onNewBlockHash(hash string, height uint32) {
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error("onNewBlockHash recovered from panic: ", r)
+		}
+	}()
 	for _, c := range callbacksOnNewBlock {
 		c(hash, height)
+	}
+}
+
+func onNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error("onNewFiatRatesTicker recovered from panic: ", r)
+		}
+	}()
+	for _, c := range callbacksOnNewFiatRatesTicker {
+		c(ticker)
 	}
 }
 
@@ -543,6 +590,7 @@ func storeInternalStateLoop() {
 		close(stopCompute)
 		close(chanStoreInternalStateDone)
 	}()
+	signal.Notify(stopCompute, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	var computeRunning bool
 	lastCompute := time.Now()
 	lastAppInfo := time.Now()
@@ -581,8 +629,24 @@ func storeInternalStateLoop() {
 }
 
 func onNewTxAddr(tx *bchain.Tx, desc bchain.AddressDescriptor) {
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error("onNewTxAddr recovered from panic: ", r)
+		}
+	}()
 	for _, c := range callbacksOnNewTxAddr {
 		c(tx, desc)
+	}
+}
+
+func onNewTx(tx *bchain.MempoolTx) {
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error("onNewTx recovered from panic: ", r)
+		}
+	}()
+	for _, c := range callbacksOnNewTx {
+		c(tx)
 	}
 }
 
@@ -649,4 +713,35 @@ func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.
 	err = api.ComputeFeeStats(blockFrom, blockTo, stopCompute)
 	glog.Info("computeFeeStats finished in ", time.Since(start))
 	return err
+}
+
+func initFiatRatesDownloader(db *db.RocksDB, configfile string) {
+	data, err := ioutil.ReadFile(configfile)
+	if err != nil {
+		glog.Errorf("Error reading file %v, %v", configfile, err)
+		return
+	}
+
+	var config struct {
+		FiatRates       string `json:"fiat_rates"`
+		FiatRatesParams string `json:"fiat_rates_params"`
+	}
+
+	err = json.Unmarshal(data, &config)
+	if err != nil {
+		glog.Errorf("Error parsing config file %v, %v", configfile, err)
+		return
+	}
+
+	if config.FiatRates == "" || config.FiatRatesParams == "" {
+		glog.Infof("FiatRates config (%v) is empty, so the functionality is disabled.", configfile)
+	} else {
+		fiatRates, err := fiat.NewFiatRatesDownloader(db, config.FiatRates, config.FiatRatesParams, nil, onNewFiatRatesTicker)
+		if err != nil {
+			glog.Errorf("NewFiatRatesDownloader Init error: %v", err)
+			return
+		}
+		glog.Infof("Starting %v FiatRates downloader...", config.FiatRates)
+		go fiatRates.Run()
+	}
 }
