@@ -1,4 +1,4 @@
-package ravencoin
+package trezarcoin
 
 import (
 	"encoding/json"
@@ -9,47 +9,44 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
-// RavencoinRPC is an interface to JSON-RPC bitcoind service.
-type RavencoinRPC struct {
+// TrezarcoinRPC is an interface to JSON-RPC bitcoind service.
+type TrezarcoinRPC struct {
 	*btc.BitcoinRPC
 }
 
-// NewRavencoinRPC returns new RavencoinRPC instance.
-func NewRavencoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
+// NewTrezarcoinRPC returns new TrezarcoinRPC instance.
+func NewTrezarcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	b, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
 		return nil, err
 	}
 
-	s := &RavencoinRPC{
+	s := &TrezarcoinRPC{
 		b.(*btc.BitcoinRPC),
 	}
-	s.RPCMarshaler = btc.JSONMarshalerV2{}
+	s.RPCMarshaler = btc.JSONMarshalerV1{}
 	s.ChainConfig.SupportsEstimateFee = false
 
 	return s, nil
 }
 
-// Initialize initializes RavencoinRPC instance.
-func (b *RavencoinRPC) Initialize() error {
+// Initialize initializes TrezarcoinRPC instance.
+func (b *TrezarcoinRPC) Initialize() error {
 	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
 	}
 	chainName := ci.Chain
+
+	glog.Info("Chain name ", chainName)
 	params := GetChainParams(chainName)
 
 	// always create parser
-	b.Parser = NewRavencoinParser(params, b.ChainConfig)
+	b.Parser = NewTrezarcoinParser(params, b.ChainConfig)
 
 	// parameters for getInfo request
-	if params.Net == MainnetMagic {
-		b.Testnet = false
-		b.Network = "livenet"
-	} else {
-		b.Testnet = true
-		b.Network = "testnet"
-	}
+	b.Testnet = false
+	b.Network = "livenet"
 
 	glog.Info("rpc: block chain ", params.Name)
 
@@ -57,10 +54,10 @@ func (b *RavencoinRPC) Initialize() error {
 }
 
 // GetBlock returns block with given hash.
-func (b *RavencoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+func (f *TrezarcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var err error
 	if hash == "" && height > 0 {
-		hash, err = b.GetBlockHash(height)
+		hash, err = f.GetBlockHash(height)
 		if err != nil {
 			return nil, err
 		}
@@ -72,7 +69,7 @@ func (b *RavencoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, erro
 	req := btc.CmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	req.Params.Verbosity = 1
-	err = b.Call(&req, &res)
+	err = f.Call(&req, &res)
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
@@ -83,10 +80,10 @@ func (b *RavencoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, erro
 
 	txs := make([]bchain.Tx, 0, len(res.Result.Txids))
 	for _, txid := range res.Result.Txids {
-		tx, err := b.GetTransaction(txid)
+		tx, err := f.GetTransaction(txid)
 		if err != nil {
 			if err == bchain.ErrTxNotFound {
-				glog.Errorf("rpc: getblock: skipping transaction in block %s due to error: %s", hash, err)
+				glog.Errorf("rpc: getblock: skipping transanction in block %s due error: %s", hash, err)
 				continue
 			}
 			return nil, err
@@ -102,6 +99,16 @@ func (b *RavencoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, erro
 
 // GetTransactionForMempool returns a transaction by the transaction ID.
 // It could be optimized for mempool, i.e. without block time and confirmations
-func (b *RavencoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
-	return b.GetTransaction(txid)
+func (f *TrezarcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
+	return f.GetTransaction(txid)
+}
+
+// GetMempoolEntry returns mempool data for given transaction
+func (f *TrezarcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
+	return nil, errors.New("GetMempoolEntry: not implemented")
+}
+
+func isErrBlockNotFound(err *bchain.RPCError) bool {
+	return err.Message == "Block not found" ||
+		err.Message == "Block height out of range"
 }

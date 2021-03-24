@@ -1,15 +1,16 @@
-package zec
+package snowgem
 
 import (
-	"github.com/martinboehm/btcd/wire"
-	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
+
+	"github.com/martinboehm/btcd/wire"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 const (
 	// MainnetMagic is mainnet network constant
-	MainnetMagic wire.BitcoinNet = 0x6427e924
+	MainnetMagic wire.BitcoinNet = 0x6427c824
 	// TestnetMagic is testnet network constant
 	TestnetMagic wire.BitcoinNet = 0xbff91afa
 	// RegtestMagic is regtest network constant
@@ -31,8 +32,8 @@ func init() {
 
 	// Address encoding magics
 	MainNetParams.AddressMagicLen = 2
-	MainNetParams.PubKeyHashAddrID = []byte{0x1C, 0xB8} // base58 prefix: t1
-	MainNetParams.ScriptHashAddrID = []byte{0x1C, 0xBD} // base58 prefix: t3
+	MainNetParams.PubKeyHashAddrID = []byte{0x1C, 0x28} // base58 prefix: s1
+	MainNetParams.ScriptHashAddrID = []byte{0x1C, 0x2D} // base58 prefix: s3
 
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
@@ -46,23 +47,23 @@ func init() {
 	RegtestParams.Net = RegtestMagic
 }
 
-// ZCashParser handle
-type ZCashParser struct {
+// SnowGemParser handle
+type SnowGemParser struct {
 	*btc.BitcoinParser
 	baseparser *bchain.BaseParser
 }
 
-// NewZCashParser returns new ZCashParser instance
-func NewZCashParser(params *chaincfg.Params, c *btc.Configuration) *ZCashParser {
-	return &ZCashParser{
+// NewSnowGemParser returns new SnowGemParser instance
+func NewSnowGemParser(params *chaincfg.Params, c *btc.Configuration) *SnowGemParser {
+	return &SnowGemParser{
 		BitcoinParser: btc.NewBitcoinParser(params, c),
 		baseparser:    &bchain.BaseParser{},
 	}
 }
 
-// GetChainParams contains network parameters for the main ZCash network,
-// the regression test ZCash network, the test ZCash network and
-// the simulation test ZCash network, in this order
+// GetChainParams contains network parameters for the main SnowGem network,
+// the regression test SnowGem network, the test SnowGem network and
+// the simulation test SnowGem network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
 	if !chaincfg.IsRegistered(&MainNetParams) {
 		err := chaincfg.Register(&MainNetParams)
@@ -87,11 +88,11 @@ func GetChainParams(chain string) *chaincfg.Params {
 }
 
 // PackTx packs transaction to byte array using protobuf
-func (p *ZCashParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+func (p *SnowGemParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	return p.baseparser.PackTx(tx, height, blockTime)
 }
 
 // UnpackTx unpacks transaction from protobuf byte array
-func (p *ZCashParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+func (p *SnowGemParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	return p.baseparser.UnpackTx(buf)
 }

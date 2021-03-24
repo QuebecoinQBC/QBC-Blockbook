@@ -1,4 +1,4 @@
-package viacoin
+package unobtanium
 
 import (
 	"encoding/json"
@@ -8,19 +8,19 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
-// ViacoinRPC is an interface to JSON-RPC bitcoind service
-type ViacoinRPC struct {
+// UnobtaniumRPC is an interface to JSON-RPC bitcoind service
+type UnobtaniumRPC struct {
 	*btc.BitcoinRPC
 }
 
-// NewViacoinRPC returns new ViacoinRPC instance
-func NewViacoinRPC(config json.RawMessage, pushHandler func(notificationType bchain.NotificationType)) (bchain.BlockChain, error) {
+// NewUnobtaniumRPC returns new UnobtaniumRPC instance
+func NewUnobtaniumRPC(config json.RawMessage, pushHandler func(notificationType bchain.NotificationType)) (bchain.BlockChain, error) {
 	b, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
 		return nil, err
 	}
 
-	s := &ViacoinRPC{
+	s := &UnobtaniumRPC{
 		b.(*btc.BitcoinRPC),
 	}
 	s.RPCMarshaler = btc.JSONMarshalerV1{}
@@ -29,8 +29,8 @@ func NewViacoinRPC(config json.RawMessage, pushHandler func(notificationType bch
 	return s, nil
 }
 
-// Initialize initializes ViacoinRPC instance.
-func (b *ViacoinRPC) Initialize() error {
+// Initialize initializes UnobtaniumRPC instance.
+func (b *UnobtaniumRPC) Initialize() error {
 	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
@@ -41,7 +41,7 @@ func (b *ViacoinRPC) Initialize() error {
 	params := GetChainParams(chainName)
 
 	// always create parser
-	b.Parser = NewViacoinParser(params, b.ChainConfig)
+	b.Parser = NewUnobtaniumParser(params, b.ChainConfig)
 
 	// parameters for getInfo request
 	if params.Net == MainnetMagic {
@@ -58,7 +58,7 @@ func (b *ViacoinRPC) Initialize() error {
 }
 
 // GetBlock returns block with given hash
-func (b *ViacoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+func (b *UnobtaniumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var err error
 	if hash == "" {
 		hash, err = b.GetBlockHash(height)
