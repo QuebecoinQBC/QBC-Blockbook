@@ -1,18 +1,17 @@
 package server
 
 import (
-	"blockbook/api"
-	"blockbook/bchain"
-	"blockbook/common"
-	"blockbook/db"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/golang/glog"
-
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"blockbook/api"
+	"blockbook/bchain"
+	"blockbook/common"
+	"blockbook/db"
 )
 
 // InternalServer is handle to internal http server
